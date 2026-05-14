@@ -84,8 +84,8 @@ def main():
         scanner=scanner if MONITOR_NEW_CONTRACTS else None,
     )
 
-    if db.get_setting("gas_strategy") is None:
-        db.set_setting("gas_strategy", DEFAULT_GAS_STRATEGY)
+    if db.get_setting(0, "gas_strategy") is None:
+        db.set_setting(0, "gas_strategy", DEFAULT_GAS_STRATEGY)
 
     bot = NFTBot(
         token=TELEGRAM_BOT_TOKEN,

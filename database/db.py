@@ -25,24 +25,29 @@ class Database:
         c.executescript("""
             CREATE TABLE IF NOT EXISTS wallets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 0,
                 label TEXT NOT NULL,
-                address TEXT NOT NULL UNIQUE,
+                address TEXT NOT NULL,
                 encrypted_key TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                is_active INTEGER NOT NULL DEFAULT 1
+                is_active INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(user_id, address)
             );
             CREATE TABLE IF NOT EXISTS monitored_contracts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                address TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL DEFAULT 0,
+                address TEXT NOT NULL,
                 name TEXT,
                 symbol TEXT,
                 added_by INTEGER,
                 status TEXT NOT NULL DEFAULT 'pending',
                 go_live_tx TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, address)
             );
             CREATE TABLE IF NOT EXISTS mint_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 0,
                 contract_address TEXT NOT NULL,
                 wallet_id INTEGER NOT NULL,
                 quantity INTEGER NOT NULL DEFAULT 1,
@@ -54,11 +59,14 @@ class Database:
                 FOREIGN KEY (wallet_id) REFERENCES wallets(id)
             );
             CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
+                user_id INTEGER NOT NULL DEFAULT 0,
+                key TEXT NOT NULL,
+                value TEXT NOT NULL,
+                PRIMARY KEY (user_id, key)
             );
             CREATE TABLE IF NOT EXISTS pending_mints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 0,
                 contract_address TEXT NOT NULL,
                 wallet_id INTEGER NOT NULL,
                 quantity INTEGER NOT NULL DEFAULT 1,
@@ -71,55 +79,101 @@ class Database:
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (wallet_id) REFERENCES wallets(id)
             );
-            INSERT OR IGNORE INTO settings (key, value) VALUES ('gas_strategy', 'fast');
-            INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_mint', 'true');
         """)
+        c.executescript("""
+            INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'gas_strategy', 'fast');
+            INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'auto_mint', 'true');
+        """)
+        self._migrate()
         self.conn.commit()
 
-    def add_wallet(self, label: str, address: str, encrypted_key: str) -> int:
+    def _migrate(self):
+        c = self.conn
+        existing_cols = [row["name"] for row in c.execute("PRAGMA table_info(wallets)").fetchall()]
+        if "user_id" not in existing_cols:
+            c.executescript("""
+                ALTER TABLE wallets ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE monitored_contracts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE mint_jobs ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE pending_mints ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
+            """)
+        settings_cols = [row["name"] for row in c.execute("PRAGMA table_info(settings)").fetchall()]
+        if "user_id" not in settings_cols:
+            c.executescript("""
+                ALTER TABLE settings RENAME TO settings_old;
+                CREATE TABLE settings (
+                    user_id INTEGER NOT NULL DEFAULT 0,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    PRIMARY KEY (user_id, key)
+                );
+                INSERT INTO settings (user_id, key, value) SELECT 0, key, value FROM settings_old;
+                DROP TABLE settings_old;
+            """)
+
+    def add_wallet(self, user_id: int, label: str, address: str, encrypted_key: str) -> int:
         cur = self.conn.execute(
-            "INSERT INTO wallets (label, address, encrypted_key) VALUES (?, ?, ?)",
-            (label, address, encrypted_key),
+            "INSERT INTO wallets (user_id, label, address, encrypted_key) VALUES (?, ?, ?, ?)",
+            (user_id, label, address, encrypted_key),
         )
         self.conn.commit()
         return cur.lastrowid
 
-    def get_wallets(self, active_only=True):
-        q = "SELECT * FROM wallets"
+    def get_wallets(self, user_id: int, active_only=True):
+        q = "SELECT * FROM wallets WHERE user_id = ?"
+        params = [user_id]
         if active_only:
-            q += " WHERE is_active = 1"
-        return self.conn.execute(q).fetchall()
+            q += " AND is_active = 1"
+        return self.conn.execute(q, params).fetchall()
 
     def get_wallet(self, wallet_id: int):
         return self.conn.execute(
             "SELECT * FROM wallets WHERE id = ?", (wallet_id,)
         ).fetchone()
 
-    def delete_wallet(self, wallet_id: int):
-        self.conn.execute("UPDATE wallets SET is_active = 0 WHERE id = ?", (wallet_id,))
+    def delete_wallet(self, user_id: int, wallet_id: int):
+        self.conn.execute(
+            "UPDATE wallets SET is_active = 0 WHERE id = ? AND user_id = ?",
+            (wallet_id, user_id),
+        )
         self.conn.commit()
 
-    def add_monitored_contract(self, address: str, name: str = None, symbol: str = None):
+    def add_monitored_contract(self, user_id: int, address: str, name: str = None, symbol: str = None):
         addr = address.lower()
         existing = self.conn.execute(
-            "SELECT id FROM monitored_contracts WHERE address = ?", (addr,)
+            "SELECT id FROM monitored_contracts WHERE user_id = ? AND address = ?",
+            (user_id, addr),
         ).fetchone()
         if existing:
             return existing["id"]
         cur = self.conn.execute(
-            "INSERT INTO monitored_contracts (address, name, symbol) VALUES (?, ?, ?)",
-            (addr, name, symbol),
+            "INSERT INTO monitored_contracts (user_id, address, name, symbol) VALUES (?, ?, ?, ?)",
+            (user_id, addr, name, symbol),
         )
         self.conn.commit()
         return cur.lastrowid
 
-    def get_monitored_contracts(self, status: str = None):
-        q = "SELECT * FROM monitored_contracts"
-        params = []
+    def get_monitored_contracts(self, user_id: int, status: str = None):
+        q = "SELECT * FROM monitored_contracts WHERE user_id = ?"
+        params = [user_id]
         if status:
-            q += " WHERE status = ?"
+            q += " AND status = ?"
             params.append(status)
         return self.conn.execute(q, params).fetchall()
+
+    def get_contract_monitor_users(self, contract_address: str):
+        rows = self.conn.execute(
+            "SELECT DISTINCT user_id FROM monitored_contracts WHERE address = ? AND status = 'pending'",
+            (contract_address.lower(),),
+        ).fetchall()
+        return [r["user_id"] for r in rows]
+
+    def get_pending_mint_users(self, contract_address: str):
+        rows = self.conn.execute(
+            "SELECT DISTINCT user_id FROM pending_mints WHERE contract_address = ? AND status = 'pending'",
+            (contract_address.lower(),),
+        ).fetchall()
+        return [r["user_id"] for r in rows]
 
     def update_contract_status(self, contract_id: int, status: str, go_live_tx: str = None):
         q = "UPDATE monitored_contracts SET status = ?"
@@ -132,22 +186,28 @@ class Database:
         self.conn.execute(q, params)
         self.conn.commit()
 
-    def get_setting(self, key: str):
+    def get_setting(self, user_id: int, key: str):
         row = self.conn.execute(
-            "SELECT value FROM settings WHERE key = ?", (key,)
+            "SELECT value FROM settings WHERE user_id = ? AND key = ?", (user_id, key)
+        ).fetchone()
+        if row:
+            return row["value"]
+        row = self.conn.execute(
+            "SELECT value FROM settings WHERE user_id = 0 AND key = ?", (key,)
         ).fetchone()
         return row["value"] if row else None
 
-    def set_setting(self, key: str, value: str):
+    def set_setting(self, user_id: int, key: str, value: str):
         self.conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value)
+            "INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, ?, ?)",
+            (user_id, key, value),
         )
         self.conn.commit()
 
-    def add_mint_job(self, contract_address: str, wallet_id: int, quantity: int = 1):
+    def add_mint_job(self, user_id: int, contract_address: str, wallet_id: int, quantity: int = 1):
         cur = self.conn.execute(
-            "INSERT INTO mint_jobs (contract_address, wallet_id, quantity) VALUES (?, ?, ?)",
-            (contract_address, wallet_id, quantity),
+            "INSERT INTO mint_jobs (user_id, contract_address, wallet_id, quantity) VALUES (?, ?, ?, ?)",
+            (user_id, contract_address, wallet_id, quantity),
         )
         self.conn.commit()
         return cur.lastrowid
@@ -169,27 +229,33 @@ class Database:
         self.conn.execute(q, params)
         self.conn.commit()
 
-    def get_mint_jobs(self, status: str = None, limit: int = 20):
-        q = "SELECT * FROM mint_jobs"
-        params = []
+    def get_mint_jobs(self, user_id: int, status: str = None, limit: int = 20):
+        q = "SELECT * FROM mint_jobs WHERE user_id = ?"
+        params = [user_id]
         if status:
-            q += " WHERE status = ?"
+            q += " AND status = ?"
             params.append(status)
         q += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
         return self.conn.execute(q, params).fetchall()
 
-    def add_pending_mint(self, contract_address: str, wallet_id: int, quantity: int = 1,
+    def add_pending_mint(self, user_id: int, contract_address: str, wallet_id: int, quantity: int = 1,
                           mint_price_wei: str = "0", fn_sig: str = None,
                           gas_strategy: str = None, chat_id: int = None) -> int:
         cur = self.conn.execute(
-            "INSERT INTO pending_mints (contract_address, wallet_id, quantity, mint_price_wei, fn_sig, gas_strategy, chat_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (contract_address.lower(), wallet_id, quantity, mint_price_wei, fn_sig, gas_strategy, chat_id),
+            "INSERT INTO pending_mints (user_id, contract_address, wallet_id, quantity, mint_price_wei, fn_sig, gas_strategy, chat_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, contract_address.lower(), wallet_id, quantity, mint_price_wei, fn_sig, gas_strategy, chat_id),
         )
         self.conn.commit()
         return cur.lastrowid
 
-    def get_pending_mints(self, status: str = "pending"):
+    def get_pending_mints(self, user_id: int, status: str = "pending"):
+        return self.conn.execute(
+            "SELECT * FROM pending_mints WHERE user_id = ? AND status = ? ORDER BY created_at ASC",
+            (user_id, status),
+        ).fetchall()
+
+    def get_all_pending_mints(self, status: str = "pending"):
         return self.conn.execute(
             "SELECT * FROM pending_mints WHERE status = ? ORDER BY created_at ASC",
             (status,),
@@ -210,10 +276,10 @@ class Database:
         self.conn.execute(q, params)
         self.conn.commit()
 
-    def update_pending_mint_by_contract(self, contract_address: str, status: str):
+    def update_pending_mint_by_contract(self, user_id: int, contract_address: str, status: str):
         self.conn.execute(
-            "UPDATE pending_mints SET status = ? WHERE contract_address = ? AND status = 'pending'",
-            (status, contract_address.lower()),
+            "UPDATE pending_mints SET status = ? WHERE user_id = ? AND contract_address = ? AND status = 'pending'",
+            (status, user_id, contract_address.lower()),
         )
         self.conn.commit()
 

@@ -60,6 +60,9 @@ class NFTBot:
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.cmd_echo))
         logger.info(f"Registered {len(self.app.handlers.get(0, []))} handlers")
 
+    def _user_id(self, update: Update) -> int:
+        return update.effective_user.id if update.effective_user else 0
+
     def _check_auth(self, update: Update) -> bool:
         if not self.allowed_users:
             return True
@@ -124,7 +127,8 @@ class NFTBot:
     async def cmd_wallets(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
-        wallets = self.db.get_wallets()
+        uid = self._user_id(update)
+        wallets = self.db.get_wallets(uid)
         if not wallets:
             await self._reply(update, "No wallets. Use /createwallet or /addwallet.")
             return
@@ -152,7 +156,7 @@ class NFTBot:
             address = self.wallet_mgr.import_private_key(pk)
             encrypted = self.wallet_mgr.encrypt_private_key(pk)
             label = f"wallet_{address[:6]}"
-            self.db.add_wallet(label, address, encrypted)
+            self.db.add_wallet(self._user_id(update), label, address, encrypted)
             await self._reply(update,
                 f"Wallet imported: `{address[:6]}...{address[-4:]}`",
             )
@@ -162,10 +166,11 @@ class NFTBot:
     async def cmd_create_wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
+        uid = self._user_id(update)
         address, pk = self.wallet_mgr.create_wallet()
         encrypted = self.wallet_mgr.encrypt_private_key(pk)
         label = f"wallet_{address[:6]}"
-        self.db.add_wallet(label, address, encrypted)
+        self.db.add_wallet(uid, label, address, encrypted)
         await self._reply(update,
             f"**New Wallet Created**\nAddress: `{address}`\nPrivate Key: `{pk}`\n\n"
             "**SAVE THIS KEY. It will not be shown again.**",
@@ -180,7 +185,7 @@ class NFTBot:
             return
         try:
             wallet_id = int(args[0])
-            self.db.delete_wallet(wallet_id)
+            self.db.delete_wallet(self._user_id(update), wallet_id)
             await self._reply(update, f"Wallet {wallet_id} deleted.")
         except Exception as e:
             await self._reply(update, f"Error: {e}")
@@ -188,6 +193,7 @@ class NFTBot:
     async def cmd_monitor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
+        uid = self._user_id(update)
         args = context.args
         if not args:
             await self._reply(update, "Usage: /monitor `<contract_address>`")
@@ -196,7 +202,7 @@ class NFTBot:
         try:
             self.monitor.add_contract(addr)
             info = self.engine.get_contract_info(addr)
-            cid = self.db.add_monitored_contract(addr, info.get("name"), info.get("symbol"))
+            cid = self.db.add_monitored_contract(uid, addr, info.get("name"), info.get("symbol"))
             mint_price_eth = info.get('mint_price', 0) / 1e18
             await self._reply(update,
                 f"**Monitoring Contract**\n"
@@ -213,7 +219,8 @@ class NFTBot:
     async def cmd_contracts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
-        contracts = self.db.get_monitored_contracts()
+        uid = self._user_id(update)
+        contracts = self.db.get_monitored_contracts(uid)
         if not contracts:
             await self._reply(update, "No contracts being monitored.")
             return
@@ -226,6 +233,7 @@ class NFTBot:
     async def cmd_mint(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
+        uid = self._user_id(update)
         args = context.args
         if not args:
             await self._reply(update, "Usage: /mint `<contract_address>` `[quantity=1]`")
@@ -236,7 +244,7 @@ class NFTBot:
         except ValueError:
             await self._reply(update, "Quantity must be a number.")
             return
-        wallets = self.db.get_wallets()
+        wallets = self.db.get_wallets(uid)
         if not wallets:
             await self._reply(update, "No wallets. Add one first.")
             return
@@ -267,7 +275,7 @@ class NFTBot:
             gas_strategy = self.db.get_setting("gas_strategy")
             await self._safe_edit(msg, f"Whitelist tier: **{fn_sig}**\nMinting...")
             result = self.engine.mint_single(contract, pk, quantity, gas_strategy)
-            job_id = self.db.add_mint_job(contract, wallet["id"], quantity)
+            job_id = self.db.add_mint_job(uid, contract, wallet["id"], quantity)
             if result["success"]:
                 self.db.update_mint_job(job_id, "confirmed",
                                         tx_hashes=result["tx_hash"],
@@ -286,6 +294,7 @@ class NFTBot:
         else:
             gas_strategy = self.db.get_setting("gas_strategy")
             pending_id = self.db.add_pending_mint(
+                user_id=uid,
                 contract_address=contract,
                 wallet_id=wallet["id"],
                 quantity=quantity,
@@ -317,6 +326,7 @@ class NFTBot:
     async def cmd_fast_mint(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
+        uid = self._user_id(update)
         args = context.args
         if not args:
             await self._reply(update, "Usage: /fastmint `<contract>` `[qty=1]` `[rounds=3]`")
@@ -328,7 +338,7 @@ class NFTBot:
         except ValueError:
             await self._reply(update, "Quantity and rounds must be numbers.")
             return
-        wallets = self.db.get_wallets()
+        wallets = self.db.get_wallets(uid)
         if not wallets:
             await self._reply(update, "No wallets.")
             return
@@ -356,6 +366,7 @@ class NFTBot:
     async def cmd_opensea_mint(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
+        uid = self._user_id(update)
         args = context.args
         if not args:
             await self._reply(update, "Usage: /openseamint `<opensea_url>` `[qty=1]`")
@@ -366,7 +377,7 @@ class NFTBot:
         except ValueError:
             await self._reply(update, "Quantity must be a number.")
             return
-        wallets = self.db.get_wallets()
+        wallets = self.db.get_wallets(uid)
         if not wallets:
             await self._reply(update, "No wallets. Add one first.")
             return
@@ -412,17 +423,18 @@ class NFTBot:
             )
             return
         strategy = args[0]
-        self.db.set_setting("gas_strategy", strategy)
+        self.db.set_setting(self._user_id(update), "gas_strategy", strategy)
         await self._reply(update, f"Gas strategy set to **{strategy}**")
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
-        wallet_count = len(self.db.get_wallets())
-        monitored = len(self.db.get_monitored_contracts())
-        jobs = self.db.get_mint_jobs(limit=5)
-        gas_strategy = self.db.get_setting("gas_strategy")
-        auto_mint = self.db.get_setting("auto_mint")
+        uid = self._user_id(update)
+        wallet_count = len(self.db.get_wallets(uid))
+        monitored = len(self.db.get_monitored_contracts(uid))
+        jobs = self.db.get_mint_jobs(uid, limit=5)
+        gas_strategy = self.db.get_setting(uid, "gas_strategy")
+        auto_mint = self.db.get_setting(uid, "auto_mint")
         text = (
             f"**Bot Status**\n"
             f"Wallets: {wallet_count}\n"
@@ -436,10 +448,11 @@ class NFTBot:
     async def cmd_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
+        uid = self._user_id(update)
         try:
             from web3 import Web3
             w3 = self.engine.w3
-            wallets = self.db.get_wallets()
+            wallets = self.db.get_wallets(uid)
             if not wallets:
                 await self._reply(update, "No wallets.")
                 return
@@ -455,7 +468,8 @@ class NFTBot:
     async def cmd_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
-        pending = self.db.get_pending_mints(status="pending")
+        uid = self._user_id(update)
+        pending = self.db.get_pending_mints(uid, status="pending")
         if not pending:
             await self._reply(update, "No pending mints.")
             return
@@ -468,13 +482,14 @@ class NFTBot:
     async def cmd_auto_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
-        self.db.set_setting("auto_mint", "true")
+        uid = self._user_id(update)
+        self.db.set_setting(uid, "auto_mint", "true")
         await self._reply(update, "Auto-mint enabled. Will mint when contracts go live.")
 
     async def cmd_auto_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_auth(update):
             return
-        self.db.set_setting("auto_mint", "false")
+        self.db.set_setting(self._user_id(update), "auto_mint", "false")
         await self._reply(update, "Auto-mint disabled.")
 
     async def cmd_test(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -503,13 +518,14 @@ class NFTBot:
             await query.edit_message_text(f"Unknown action: {data}")
 
     async def _auto_mint_contract(self, contract: str, query):
-        wallets = self.db.get_wallets()
+        uid = query.from_user.id if query.from_user else 0
+        wallets = self.db.get_wallets(uid)
         if not wallets:
             await query.edit_message_text("No wallets configured. Can't mint.")
             return
         wallet = wallets[0]
         pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
-        gas_strategy = self.db.get_setting("gas_strategy")
+        gas_strategy = self.db.get_setting(uid, "gas_strategy")
         result = self.engine.mint_single(contract, pk, 1, gas_strategy or "fast")
         if result["success"]:
             await self._safe_edit(query.message,
@@ -524,7 +540,7 @@ class NFTBot:
         self.monitor.on_new_mint_opportunity(self._on_mint_opportunity)
 
     def _sync_pending_mints(self):
-        pending = self.db.get_pending_mints(status="pending")
+        pending = self.db.get_all_pending_mints(status="pending")
         for pm in pending:
             try:
                 wallet = self.db.get_wallet(pm["wallet_id"])
@@ -560,8 +576,9 @@ class NFTBot:
         if event_type == "mint_now_live":
             pk = data.get("private_key")
             quantity = data.get("quantity", 1)
+            uids = self.db.get_pending_mint_users(contract)
             if pk:
-                gs = self.db.get_setting("gas_strategy")
+                gs = self.db.get_setting(uids[0], "gas_strategy") if uids else "fast"
                 result = self.engine.mint_single(contract, pk, quantity, gs or "fast")
                 if result["success"]:
                     text = (
@@ -570,67 +587,61 @@ class NFTBot:
                         f"Qty: {quantity}\n"
                         f"[View Tx]({result['explorer_url']})"
                     )
-                    self.db.update_pending_mint_by_contract(contract, "confirmed")
+                    for uid in uids:
+                        self.db.update_pending_mint_by_contract(uid, contract, "confirmed")
                     logger.info(f"Instant mint for {contract}: {result['tx_hash']}")
                 else:
                     text = f"Instant mint failed for `{contract[:6]}...{contract[-4:]}`: {result.get('error')}"
-                    self.db.update_pending_mint_by_contract(contract, "pending")
-                if self.allowed_users:
-                    for uid in self.allowed_users:
-                        try:
-                            await self.app.bot.send_message(chat_id=uid, text=text)
-                        except Exception:
-                            pass
+                    for uid in uids:
+                        self.db.update_pending_mint_by_contract(uid, contract, "pending")
+                for uid in uids:
+                    try:
+                        await self.app.bot.send_message(chat_id=uid, text=text)
+                    except Exception:
+                        pass
+            return
+
+        monitored_uids = self.db.get_contract_monitor_users(contract)
+        if not monitored_uids:
+            logger.warning(f"No users monitoring {contract}")
+            return
+
+        for uid in monitored_uids:
+            try:
+                auto_mint = self.db.get_setting(uid, "auto_mint") == "true"
+                wallets = self.db.get_wallets(uid)
+                text = (
+                    f"**NFT Mint Opportunity!**\n"
+                    f"Contract: `{contract[:6]}...{contract[-4:]}`\n"
+                    f"Name: {name}\n"
+                    f"Source: {source}\n"
+                )
+                if auto_mint and wallets:
+                    wallet = wallets[0]
+                    pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
+                    gs = self.db.get_setting(uid, "gas_strategy")
+                    result = self.engine.mint_single(contract, pk, 1, gs or "fast")
+                    if result["success"]:
+                        text += f"\n**Minted!** [Tx]({result['explorer_url']})"
+                    else:
+                        text += f"\nMint failed: {result.get('error')}"
+                    try:
+                        await self.app.bot.send_message(chat_id=uid, text=text)
+                    except Exception as e:
+                        logger.error(f"Auto-mint send to {uid}: {e}")
                 else:
-                    logger.info(text)
-            return
-
-        auto_mint = self.db.get_setting("auto_mint") == "true"
-        text = (
-            f"**NFT Mint Opportunity!**\n"
-            f"Contract: `{contract[:6]}...{contract[-4:]}`\n"
-            f"Name: {name}\n"
-            f"Source: {source}\n"
-        )
-        wallets = self.db.get_wallets()
-        if not wallets:
-            logger.warning("No wallets configured, cannot mint")
-            return
-
-        result = None
-        if auto_mint:
-            wallet = wallets[0]
-            pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
-            gs = self.db.get_setting("gas_strategy")
-            result = self.engine.mint_single(contract, pk, 1, gs)
-            if result["success"]:
-                text += f"\n**Minted!** [Tx]({result['explorer_url']})"
-            else:
-                text += f"\nMint failed: {result.get('error')}"
-
-        if not self.allowed_users:
-            if result:
-                logger.info(f"Auto-mint result for {contract}: {result.get('success')}")
-            return
-
-        if auto_mint:
-            for uid in self.allowed_users:
-                try:
-                    await self.app.bot.send_message(chat_id=uid, text=text)
-                except Exception as e:
-                    logger.error(f"Auto-mint send to {uid}: {e}")
-        else:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Mint Now", callback_data=f"mint_now:{contract}")]
-            ])
-            for uid in self.allowed_users:
-                try:
-                    await self.app.bot.send_message(
-                        chat_id=uid, text=text,
-                        reply_markup=keyboard,
-                    )
-                except Exception as e:
-                    logger.error(f"Alert send to {uid}: {e}")
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("Mint Now", callback_data=f"mint_now:{contract}")]
+                    ])
+                    try:
+                        await self.app.bot.send_message(
+                            chat_id=uid, text=text,
+                            reply_markup=keyboard,
+                        )
+                    except Exception as e:
+                        logger.error(f"Alert send to {uid}: {e}")
+            except Exception as e:
+                logger.error(f"Error processing opportunity for user {uid}: {e}")
 
     async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Handler error: {context.error}", exc_info=context.error)
@@ -644,7 +655,7 @@ class NFTBot:
             logger.error(f"Send alert error: {e}")
 
     async def _check_pending_mints(self, context: ContextTypes.DEFAULT_TYPE):
-        pending = self.db.get_pending_mints(status="pending")
+        pending = self.db.get_all_pending_mints(status="pending")
         if not pending:
             return
         synced = False
