@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import logging
 import asyncio
 from pathlib import Path
@@ -99,7 +100,16 @@ def main():
 
     orchestrator.start()
     logger.info("Monitor started. Launching bot...")
-    bot.run()
+
+    retry_delay = 1
+    max_delay = 60
+    while True:
+        try:
+            bot.run()
+        except Exception as e:
+            logger.error(f"Bot crashed: {e}. Restarting in {retry_delay}s...", exc_info=True)
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
 
 
 if __name__ == "__main__":
