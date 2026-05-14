@@ -272,7 +272,7 @@ class NFTBot:
         )
 
         if fn_name:
-            gas_strategy = self.db.get_setting("gas_strategy")
+            gas_strategy = self.db.get_setting(uid, "gas_strategy")
             await self._safe_edit(msg, f"Whitelist tier: **{fn_sig}**\nMinting...")
             result = self.engine.mint_single(contract, pk, quantity, gas_strategy)
             job_id = self.db.add_mint_job(uid, contract, wallet["id"], quantity)
@@ -292,7 +292,7 @@ class NFTBot:
                 self.db.update_mint_job(job_id, "failed", error=result.get("error"))
                 await self._safe_edit(msg, f"Mint failed: {result.get('error')}")
         else:
-            gas_strategy = self.db.get_setting("gas_strategy")
+            gas_strategy = self.db.get_setting(uid, "gas_strategy")
             pending_id = self.db.add_pending_mint(
                 user_id=uid,
                 contract_address=contract,
@@ -347,7 +347,7 @@ class NFTBot:
             return
         wallet = wallets[0]
         pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
-        gas_strategy = self.db.get_setting("gas_strategy")
+        gas_strategy = self.db.get_setting(uid, "gas_strategy")
         results = self.engine.mint_parallel_single_wallet(contract, pk, quantity, rounds, gas_strategy)
         successes = [r for r in results if r["success"]]
         fails = [r for r in results if not r["success"]]
@@ -390,7 +390,7 @@ class NFTBot:
         await self._reply(update, f"Found: {name}\nContract: {contract}\nMinting...")
         wallet = wallets[0]
         pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
-        gas_strategy = self.db.get_setting("gas_strategy")
+        gas_strategy = self.db.get_setting(uid, "gas_strategy")
         mint_result = self.engine.mint_single(contract, pk, quantity, gas_strategy or "fast")
         if mint_result["success"]:
             await self._reply(update, f"Minted!\nName: {name}\nQty: {quantity}\nTx: {mint_result['explorer_url']}")
