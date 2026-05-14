@@ -80,7 +80,7 @@ class Database:
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (wallet_id) REFERENCES wallets(id)
             );
-            INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'gas_strategy', 'fast');
+            INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'gas_strategy', 'auto');
             INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'auto_mint', 'true');
         """)
         self.conn.commit()

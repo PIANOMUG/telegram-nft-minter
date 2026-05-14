@@ -113,7 +113,7 @@ class NFTBot:
             "/fastmint `<address>` `[qty]` `[rounds]` - Mint NFTs at superspeed\n"
             "/openseamint `<url>` `[qty]` - Mint using an OpenSea link\n"
             "/gas - Check current gas prices\n"
-            "/setgas `<slow|average|fast|instant|max>` - Set gas strategy\n"
+            "/setgas `<auto|slow|average|fast|instant|max>` - Set gas strategy\n"
             "/balance - Check ETH balance\n"
             "/autoon - Enable auto-mint on detection\n"
             "/autooff - Disable auto-mint\n"
@@ -391,7 +391,7 @@ class NFTBot:
         wallet = wallets[0]
         pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
         gas_strategy = self.db.get_setting(uid, "gas_strategy")
-        mint_result = self.engine.mint_single(contract, pk, quantity, gas_strategy or "fast")
+        mint_result = self.engine.mint_single(contract, pk, quantity, gas_strategy or "auto")
         if mint_result["success"]:
             await self._reply(update, f"Minted!\nName: {name}\nQty: {quantity}\nTx: {mint_result['explorer_url']}")
         else:
@@ -416,10 +416,10 @@ class NFTBot:
         if not self._check_auth(update):
             return
         args = context.args
-        valid = ("slow", "average", "fast", "instant", "max")
+        valid = ("auto", "slow", "average", "fast", "instant", "max")
         if not args or args[0] not in valid:
             await self._reply(update,
-                "Usage: /setgas `<slow|average|fast|instant|max>`"
+                "Usage: /setgas `<auto|slow|average|fast|instant|max>`"
             )
             return
         strategy = args[0]
@@ -526,7 +526,7 @@ class NFTBot:
         wallet = wallets[0]
         pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
         gas_strategy = self.db.get_setting(uid, "gas_strategy")
-        result = self.engine.mint_single(contract, pk, 1, gas_strategy or "fast")
+        result = self.engine.mint_single(contract, pk, 1, gas_strategy or "auto")
         if result["success"]:
             await self._safe_edit(query.message,
                 f"**Auto-Mint Sent!**\n"
@@ -579,7 +579,7 @@ class NFTBot:
             uids = self.db.get_pending_mint_users(contract)
             if pk:
                 gs = self.db.get_setting(uids[0], "gas_strategy") if uids else "fast"
-                result = self.engine.mint_single(contract, pk, quantity, gs or "fast")
+                result = self.engine.mint_single(contract, pk, quantity, gs or "auto")
                 if result["success"]:
                     text = (
                         f"**Instant Auto-Mint!**\n"
@@ -620,7 +620,7 @@ class NFTBot:
                     wallet = wallets[0]
                     pk = self.wallet_mgr.decrypt_private_key(wallet["encrypted_key"])
                     gs = self.db.get_setting(uid, "gas_strategy")
-                    result = self.engine.mint_single(contract, pk, 1, gs or "fast")
+                    result = self.engine.mint_single(contract, pk, 1, gs or "auto")
                     if result["success"]:
                         text += f"\n**Minted!** [Tx]({result['explorer_url']})"
                     else:

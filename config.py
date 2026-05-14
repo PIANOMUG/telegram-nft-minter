@@ -14,9 +14,9 @@ ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 OPENSEA_API_KEY = os.getenv("OPENSEA_API_KEY", "")
 FLASHBOTS_RELAY = os.getenv("FLASHBOTS_RELAY", "https://relay.flashbots.net")
 
-DEFAULT_GAS_STRATEGY = os.getenv("DEFAULT_GAS_STRATEGY", "fast")
-MAX_PRIORITY_FEE_GWEI = int(os.getenv("MAX_PRIORITY_FEE_GWEI", "200"))
-MAX_FEE_GWEI = int(os.getenv("MAX_FEE_GWEI", "500"))
+DEFAULT_GAS_STRATEGY = os.getenv("DEFAULT_GAS_STRATEGY", "auto")
+MAX_PRIORITY_FEE_GWEI = int(os.getenv("MAX_PRIORITY_FEE_GWEI", "50"))
+MAX_FEE_GWEI = int(os.getenv("MAX_FEE_GWEI", "200"))
 GAS_LIMIT_MINT = int(os.getenv("GAS_LIMIT_MINT", "300000"))
 
 MONITOR_INTERVAL_SECONDS = int(os.getenv("MONITOR_INTERVAL_SECONDS", "15"))

@@ -154,58 +154,71 @@ class MintingEngine:
         return self._detect_mint_data(contract_address)
 
     def mint_single(self, contract_address: str, private_key: str, quantity: int = 1,
-                    gas_strategy: str = "fast") -> dict:
-        try:
-            contract_addr = Web3.to_checksum_address(contract_address)
-            info = self._detect_mint_data(contract_address)
-            account = self.w3.eth.account.from_key(private_key)
-            sender = account.address
-            mint_price = info["mint_price"]
-            total_value = mint_price * quantity
+                    gas_strategy: str = "auto") -> dict:
+        if gas_strategy == "fast":
+            gas_strategy = "auto"
+        contract_addr = Web3.to_checksum_address(contract_address)
+        info = self._detect_mint_data(contract_address)
+        account = self.w3.eth.account.from_key(private_key)
+        sender = account.address
+        mint_price = info["mint_price"]
+        total_value = mint_price * quantity
 
-            fn_name, fn_params, fn_sig = self.detect_available_mint(
-                contract_addr, sender, mint_price, quantity
-            )
-            if fn_name is None:
-                fn_name, fn_params = info["fn_name"], info["fn_params"]
+        fn_name, fn_params, fn_sig = self.detect_available_mint(
+            contract_addr, sender, mint_price, quantity
+        )
+        if fn_name is None:
+            fn_name, fn_params = info["fn_name"], info["fn_params"]
 
-            nonce = self.w3.eth.get_transaction_count(sender, "pending")
-            gas_params = self.gas_optimizer.get_optimal_gas(gas_strategy)
+        contract = self.w3.eth.contract(address=contract_addr, abi=MINT_ABI)
+        nonce = self.w3.eth.get_transaction_count(sender, "pending")
+        current_strategy = gas_strategy
+        last_error = None
 
-            contract = self.w3.eth.contract(address=contract_addr, abi=MINT_ABI)
+        for attempt in range(3):
+            try:
+                gas_params = self.gas_optimizer.get_optimal_gas(current_strategy)
+                if fn_params and fn_params[0] == "uint256":
+                    tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction({
+                        "from": sender, "nonce": nonce, "value": total_value,
+                        "chainId": self.w3.eth.chain_id,
+                        "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
+                        "maxFeePerGas": gas_params["maxFeePerGas"],
+                    })
+                else:
+                    tx_data = getattr(contract.functions, fn_name)().build_transaction({
+                        "from": sender, "nonce": nonce, "value": total_value,
+                        "chainId": self.w3.eth.chain_id,
+                        "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
+                        "maxFeePerGas": gas_params["maxFeePerGas"],
+                    })
 
-            if fn_params and fn_params[0] == "uint256":
-                tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction({
-                    "from": sender, "nonce": nonce, "value": total_value,
-                    "chainId": self.w3.eth.chain_id,
-                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
-                    "maxFeePerGas": gas_params["maxFeePerGas"],
-                })
-            else:
-                tx_data = getattr(contract.functions, fn_name)().build_transaction({
-                    "from": sender, "nonce": nonce, "value": total_value,
-                    "chainId": self.w3.eth.chain_id,
-                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
-                    "maxFeePerGas": gas_params["maxFeePerGas"],
-                })
+                tx_data["gas"] = GAS_LIMIT_MINT
+                signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
+                tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+                tx_hex = tx_hash.hex()
 
-            tx_data["gas"] = GAS_LIMIT_MINT
-            signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
+                return {
+                    "success": True,
+                    "tx_hash": tx_hex,
+                    "explorer_url": f"https://etherscan.io/tx/{tx_hex}",
+                    "contract": contract_address,
+                    "quantity": quantity,
+                    "gas_price_gwei": gas_params["priority_gwei"],
+                    "method": f"{fn_name}({', '.join(fn_params)})",
+                    "gas_strategy": current_strategy,
+                }
+            except Exception as e:
+                last_error = str(e)
+                if "insufficient funds" in last_error.lower():
+                    break
+                new_strategy = self.gas_optimizer.escalate_gas(current_strategy)
+                if new_strategy == current_strategy:
+                    break
+                current_strategy = new_strategy
+                nonce = self.w3.eth.get_transaction_count(sender, "pending")
 
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-            tx_hex = tx_hash.hex()
-
-            return {
-                "success": True,
-                "tx_hash": tx_hex,
-                "explorer_url": f"https://etherscan.io/tx/{tx_hex}",
-                "contract": contract_address,
-                "quantity": quantity,
-                "gas_price_gwei": gas_params["priority_gwei"],
-                "method": f"{fn_name}({', '.join(fn_params)})",
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e), "contract": contract_address}
+        return {"success": False, "error": last_error, "contract": contract_address}
 
     def mint_batch(self, contract_address: str, private_keys: list, quantity: int = 1,
                    gas_strategy: str = "fast") -> list:
