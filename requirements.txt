@@ -1,0 +1,5 @@
+python-telegram-bot>=22.0
+web3>=7.0
+cryptography>=48.0
+requests>=2.34
+python-dotenv>=1.0

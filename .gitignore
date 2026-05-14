@@ -1,0 +1,17 @@
+# Environment
+.env
+
+# Logs
+*.log
+bot.err
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Database
+data/
+
+# IDE
+.vscode/
+.idea/
