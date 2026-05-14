@@ -1,6 +1,7 @@
 import time
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -22,6 +23,7 @@ class MempoolMonitor:
         self.listeners = []
         self._running = False
         self._thread = None
+        self._executor = ThreadPoolExecutor(max_workers=20)
 
     def on_new_mint(self, callback: Callable):
         self.listeners.append(callback)
@@ -63,22 +65,21 @@ class MempoolMonitor:
                 ("whitelistMint(uint256)", True),
             ]
             addr = self.w3.to_checksum_address(contract_addr)
-            for fn_sig, needs_qty in mint_sigs_to_try:
+            def try_sig(fn_sig, needs_qty):
                 selector = self.w3.keccak(text=fn_sig)[:4]
                 if needs_qty:
                     data = self.w3.to_hex(selector + quantity.to_bytes(32, 'big'))
                 else:
                     data = self.w3.to_hex(selector)
                 try:
-                    self.w3.eth.call({
-                        "from": wallet,
-                        "to": addr,
-                        "data": data,
-                        "value": mint_price * quantity,
-                    })
+                    self.w3.eth.call({"from": wallet, "to": addr, "data": data, "value": mint_price * quantity})
                     return True
                 except Exception:
-                    continue
+                    return False
+            futures = {self._executor.submit(try_sig, fn_sig, q): fn_sig for fn_sig, q in mint_sigs_to_try}
+            for future in as_completed(futures):
+                if future.result():
+                    return True
             return False
         except Exception:
             return False
@@ -110,9 +111,18 @@ class MempoolMonitor:
 
                 cycle += 1
                 if cycle % 5 == 0 and self._pending_mints:
-                    for addr, info in list(self._pending_mints.items()):
+                    items = list(self._pending_mints.items())
+                    def check_pending(item):
+                        addr, info = item
                         if self._simulate_mint(addr, info["wallet"],
                                                 info["mint_price"], info["quantity"]):
+                            return addr, info
+                        return None
+                    check_futures = [self._executor.submit(check_pending, it) for it in items]
+                    for cf in as_completed(check_futures):
+                        result = cf.result()
+                        if result:
+                            addr, info = result
                             self._fire({
                                 "type": "mint_now_live",
                                 "contract": addr,
@@ -122,7 +132,7 @@ class MempoolMonitor:
                                 "private_key": info.get("private_key"),
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                             })
-                            del self._pending_mints[addr]
+                            self._pending_mints.pop(addr, None)
             except Exception:
                 pass
             time.sleep(0.1)

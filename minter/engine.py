@@ -7,6 +7,7 @@ from typing import Optional
 
 from .gas import GasOptimizer
 from .wallet import WalletManager
+from config import GAS_LIMIT_MINT
 
 def _dedup_abi(abi_list):
     seen = set()
@@ -21,7 +22,7 @@ def _dedup_abi(abi_list):
             result.append(item)
     return result
 
-MINT_ABI = _dedup_abi(json.loads('[{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintNFT","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_count","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"publicMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"publicSaleMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintPublic","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"presaleMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"whitelistMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"whiteListMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintPresale","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintWhitelist","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintWhiteList","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"presale","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"whitelist","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"mintPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"cost","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"price","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MINT_PRICE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'))
+MINT_ABI = _dedup_abi(json.loads('[{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintNFT","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_count","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"publicMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"publicSaleMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintPublic","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"presaleMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"whitelistMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"whiteListMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintPresale","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintWhitelist","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"mintWhiteList","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"presale","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"whitelist","outputs":[],"stateMutability":"payable","type":"function"}]'))
 
 MONITOR_ABI = json.loads('[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}]')
 
@@ -48,7 +49,8 @@ class MintingEngine:
         self.w3 = w3
         self.wallet_mgr = wallet_mgr
         self.gas_optimizer = gas_optimizer
-        self.executor = ThreadPoolExecutor(max_workers=10)
+        self.executor = ThreadPoolExecutor(max_workers=20)
+        self._info_cache = {}
 
     def _get_mint_price(self, contract: Web3, address: str) -> int:
         price_checks = ["mintPrice", "cost", "price", "MINT_PRICE"]
@@ -83,9 +85,17 @@ class MintingEngine:
     def detect_available_mint(self, contract_address: str, wallet_address: str,
                                mint_price: int = 0, quantity: int = 1):
         value = mint_price * quantity
+        addr = Web3.to_checksum_address(contract_address)
+        futures = {}
         for fn_sig, needs_quantity in MINT_CANDIDATES:
-            if self.simulate_mint_call(contract_address, wallet_address,
-                                        fn_sig, needs_quantity, quantity, value):
+            futures[self.executor.submit(
+                self.simulate_mint_call, contract_address, wallet_address,
+                fn_sig, needs_quantity, quantity, value
+            )] = (fn_sig, needs_quantity)
+
+        for future in as_completed(futures):
+            if future.result():
+                fn_sig, needs_quantity = futures[future]
                 fn_name = fn_sig.split("(")[0]
                 fn_params = ["uint256"] if needs_quantity else []
                 return fn_name, fn_params, fn_sig
@@ -118,6 +128,9 @@ class MintingEngine:
         return "mint", ["uint256"]
 
     def _detect_mint_data(self, contract_address: str) -> dict:
+        cached = self._info_cache.get(contract_address.lower())
+        if cached:
+            return cached
         addr = Web3.to_checksum_address(contract_address)
         contract = self.w3.eth.contract(address=addr, abi=MINT_ABI)
         info_contract = self.w3.eth.contract(address=addr, abi=MONITOR_ABI)
@@ -133,7 +146,9 @@ class MintingEngine:
             pass
         mint_price = self._get_mint_price(contract, contract_address)
         fn_name, fn_params = self._find_mint_function(contract)
-        return {"name": name, "symbol": symbol, "mint_price": mint_price, "fn_name": fn_name, "fn_params": fn_params}
+        result = {"name": name, "symbol": symbol, "mint_price": mint_price, "fn_name": fn_name, "fn_params": fn_params}
+        self._info_cache[contract_address.lower()] = result
+        return result
 
     def get_contract_info(self, contract_address: str) -> dict:
         return self._detect_mint_data(contract_address)
@@ -174,8 +189,7 @@ class MintingEngine:
                     "maxFeePerGas": gas_params["maxFeePerGas"],
                 })
 
-            gas_est = self.w3.eth.estimate_gas(tx_data)
-            tx_data["gas"] = int(gas_est * 1.3)
+            tx_data["gas"] = GAS_LIMIT_MINT
             signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
 
             tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -206,14 +220,70 @@ class MintingEngine:
         return results
 
     def mint_parallel_single_wallet(self, contract_address: str, private_key: str,
-                                     quantity: int = 1, rounds: int = 3,
-                                     gas_strategy: str = "fast") -> list:
-        results = []
+                                      quantity: int = 1, rounds: int = 3,
+                                      gas_strategy: str = "fast") -> list:
+        nonce = self.w3.eth.get_transaction_count(
+            self.w3.eth.account.from_key(private_key).address, "pending"
+        )
+        futures = []
         for i in range(rounds):
-            result = self.mint_single(contract_address, private_key, quantity, gas_strategy)
-            results.append(result)
-            time.sleep(0.05)
+            futures.append(
+                self.executor.submit(self._mint_with_nonce, contract_address, private_key,
+                                      quantity, gas_strategy, nonce + i)
+            )
+        results = []
+        for future in as_completed(futures):
+            results.append(future.result())
         return results
+
+    def _mint_with_nonce(self, contract_address: str, private_key: str, quantity: int,
+                          gas_strategy: str, nonce: int) -> dict:
+        try:
+            contract_addr = Web3.to_checksum_address(contract_address)
+            info = self._detect_mint_data(contract_address)
+            account = self.w3.eth.account.from_key(private_key)
+            sender = account.address
+            mint_price = info["mint_price"]
+            total_value = mint_price * quantity
+
+            fn_name, fn_params, fn_sig = self.detect_available_mint(
+                contract_addr, sender, mint_price, quantity
+            )
+            if fn_name is None:
+                fn_name, fn_params = info["fn_name"], info["fn_params"]
+
+            gas_params = self.gas_optimizer.get_optimal_gas(gas_strategy)
+            contract = self.w3.eth.contract(address=contract_addr, abi=MINT_ABI)
+
+            if fn_params and fn_params[0] == "uint256":
+                tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction({
+                    "from": sender, "nonce": nonce, "value": total_value,
+                    "chainId": self.w3.eth.chain_id,
+                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
+                    "maxFeePerGas": gas_params["maxFeePerGas"],
+                })
+            else:
+                tx_data = getattr(contract.functions, fn_name)().build_transaction({
+                    "from": sender, "nonce": nonce, "value": total_value,
+                    "chainId": self.w3.eth.chain_id,
+                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
+                    "maxFeePerGas": gas_params["maxFeePerGas"],
+                })
+
+            tx_data["gas"] = GAS_LIMIT_MINT
+            signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            return {
+                "success": True,
+                "tx_hash": tx_hash.hex(),
+                "explorer_url": f"https://etherscan.io/tx/{tx_hash.hex()}",
+                "contract": contract_address,
+                "quantity": quantity,
+                "gas_price_gwei": gas_params["priority_gwei"],
+                "method": f"{fn_name}({', '.join(fn_params)})",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "contract": contract_address}
 
     def check_transaction(self, tx_hash: str) -> dict:
         try:
