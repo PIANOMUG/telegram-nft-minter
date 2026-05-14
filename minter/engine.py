@@ -179,22 +179,18 @@ class MintingEngine:
         for attempt in range(3):
             try:
                 gas_params = self.gas_optimizer.get_optimal_gas(current_strategy)
+                tx_base = {
+                    "from": sender, "nonce": nonce, "value": total_value,
+                    "chainId": self.w3.eth.chain_id,
+                    "gas": GAS_LIMIT_MINT,
+                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
+                    "maxFeePerGas": gas_params["maxFeePerGas"],
+                }
                 if fn_params and fn_params[0] == "uint256":
-                    tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction({
-                        "from": sender, "nonce": nonce, "value": total_value,
-                        "chainId": self.w3.eth.chain_id,
-                        "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
-                        "maxFeePerGas": gas_params["maxFeePerGas"],
-                    })
+                    tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction(tx_base)
                 else:
-                    tx_data = getattr(contract.functions, fn_name)().build_transaction({
-                        "from": sender, "nonce": nonce, "value": total_value,
-                        "chainId": self.w3.eth.chain_id,
-                        "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
-                        "maxFeePerGas": gas_params["maxFeePerGas"],
-                    })
+                    tx_data = getattr(contract.functions, fn_name)().build_transaction(tx_base)
 
-                tx_data["gas"] = GAS_LIMIT_MINT
                 signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
                 tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
                 tx_hex = tx_hash.hex()
@@ -268,23 +264,18 @@ class MintingEngine:
 
             gas_params = self.gas_optimizer.get_optimal_gas(gas_strategy)
             contract = self.w3.eth.contract(address=contract_addr, abi=MINT_ABI)
-
+            tx_base = {
+                "from": sender, "nonce": nonce, "value": total_value,
+                "chainId": self.w3.eth.chain_id,
+                "gas": GAS_LIMIT_MINT,
+                "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
+                "maxFeePerGas": gas_params["maxFeePerGas"],
+            }
             if fn_params and fn_params[0] == "uint256":
-                tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction({
-                    "from": sender, "nonce": nonce, "value": total_value,
-                    "chainId": self.w3.eth.chain_id,
-                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
-                    "maxFeePerGas": gas_params["maxFeePerGas"],
-                })
+                tx_data = getattr(contract.functions, fn_name)(quantity).build_transaction(tx_base)
             else:
-                tx_data = getattr(contract.functions, fn_name)().build_transaction({
-                    "from": sender, "nonce": nonce, "value": total_value,
-                    "chainId": self.w3.eth.chain_id,
-                    "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
-                    "maxFeePerGas": gas_params["maxFeePerGas"],
-                })
+                tx_data = getattr(contract.functions, fn_name)().build_transaction(tx_base)
 
-            tx_data["gas"] = GAS_LIMIT_MINT
             signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
             tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
             return {
