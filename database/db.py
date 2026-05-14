@@ -22,6 +22,7 @@ class Database:
 
     def _init_db(self):
         c = self.conn
+        self._migrate()
         c.executescript("""
             CREATE TABLE IF NOT EXISTS wallets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,37 +80,16 @@ class Database:
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (wallet_id) REFERENCES wallets(id)
             );
-        """)
-        c.executescript("""
             INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'gas_strategy', 'fast');
             INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, 'auto_mint', 'true');
         """)
-        self._migrate()
         self.conn.commit()
 
     def _migrate(self):
         c = self.conn
-        existing_cols = [row["name"] for row in c.execute("PRAGMA table_info(wallets)").fetchall()]
-        if "user_id" not in existing_cols:
-            c.executescript("""
-                ALTER TABLE wallets ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
-                ALTER TABLE monitored_contracts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
-                ALTER TABLE mint_jobs ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
-                ALTER TABLE pending_mints ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;
-            """)
-        settings_cols = [row["name"] for row in c.execute("PRAGMA table_info(settings)").fetchall()]
-        if "user_id" not in settings_cols:
-            c.executescript("""
-                ALTER TABLE settings RENAME TO settings_old;
-                CREATE TABLE settings (
-                    user_id INTEGER NOT NULL DEFAULT 0,
-                    key TEXT NOT NULL,
-                    value TEXT NOT NULL,
-                    PRIMARY KEY (user_id, key)
-                );
-                INSERT INTO settings (user_id, key, value) SELECT 0, key, value FROM settings_old;
-                DROP TABLE settings_old;
-            """)
+        existing = [row["name"] for row in c.execute("PRAGMA table_info(wallets)").fetchall()]
+        if "user_id" not in existing:
+            c.executescript("DROP TABLE IF EXISTS wallets; DROP TABLE IF EXISTS monitored_contracts; DROP TABLE IF EXISTS mint_jobs; DROP TABLE IF EXISTS settings; DROP TABLE IF EXISTS pending_mints;")
 
     def add_wallet(self, user_id: int, label: str, address: str, encrypted_key: str) -> int:
         cur = self.conn.execute(
