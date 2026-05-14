@@ -72,7 +72,7 @@ class MempoolMonitor:
                 else:
                     data = self.w3.to_hex(selector)
                 try:
-                    self.w3.eth.call({"from": wallet, "to": addr, "data": data, "value": mint_price * quantity})
+                    self.w3.eth.call({"from": wallet, "to": addr, "data": data, "value": mint_price * quantity, "gas": 900000})
                     return True
                 except Exception:
                     return False

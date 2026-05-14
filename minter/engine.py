@@ -77,6 +77,7 @@ class MintingEngine:
                 "to": addr,
                 "data": data,
                 "value": value,
+                "gas": GAS_LIMIT_MINT * 3,
             })
             return True
         except Exception:
