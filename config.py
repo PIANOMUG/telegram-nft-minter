@@ -24,3 +24,12 @@ MONITOR_NEW_CONTRACTS = os.getenv("MONITOR_NEW_CONTRACTS", "true").lower() == "t
 
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/bot.db")
+
+RPC_BASE = os.getenv("RPC_BASE", "https://base-mainnet.g.alchemy.com/v2/your-api-key")
+RPC_ARBITRUM = os.getenv("RPC_ARBITRUM", "https://arb-mainnet.g.alchemy.com/v2/your-api-key")
+
+CHAIN_INFO = {
+    1: {"name": "Ethereum", "explorer": "https://etherscan.io", "rpc": RPC_URL, "currency": "ETH"},
+    8453: {"name": "Base", "explorer": "https://basescan.org", "rpc": RPC_BASE, "currency": "ETH"},
+    42161: {"name": "Arbitrum", "explorer": "https://arbiscan.io", "rpc": RPC_ARBITRUM, "currency": "ETH"},
+}

@@ -20,6 +20,7 @@ from database.db import Database
 from minter.wallet import WalletManager
 from minter.gas import GasOptimizer
 from minter.engine import MintingEngine
+from minter.chain import ChainManager
 from monitor.etherscan_monitor import EtherscanMonitor
 from monitor.opensea_monitor import OpenSeaMonitor
 from monitor.mempool_monitor import MempoolMonitor
@@ -54,7 +55,8 @@ def main():
     db = Database(DATABASE_PATH)
     wallet_mgr = WalletManager(ENCRYPTION_KEY)
     gas_opt = GasOptimizer(w3, max_priority_gwei=MAX_PRIORITY_FEE_GWEI, max_fee_gwei=MAX_FEE_GWEI)
-    engine = MintingEngine(w3, wallet_mgr, gas_opt)
+    chain_mgr = ChainManager()
+    engine = MintingEngine(w3, wallet_mgr, gas_opt, chain_mgr=chain_mgr, default_chain=CHAIN_ID)
 
     etherscan = None
     if ETHERSCAN_API_KEY:
@@ -96,6 +98,7 @@ def main():
         monitor=orchestrator,
         allowed_users=ALLOWED_USER_IDS or None,
         opensea=opensea,
+        chain_mgr=chain_mgr,
     )
 
     orchestrator.start()

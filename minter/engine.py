@@ -7,6 +7,7 @@ from typing import Optional
 
 from .gas import GasOptimizer
 from .wallet import WalletManager
+from .chain import ChainManager
 from config import GAS_LIMIT_MINT
 
 def _dedup_abi(abi_list):
@@ -45,10 +46,13 @@ MINT_CANDIDATES = [
 
 
 class MintingEngine:
-    def __init__(self, w3: Web3, wallet_mgr: WalletManager, gas_optimizer: GasOptimizer):
+    def __init__(self, w3: Web3, wallet_mgr: WalletManager, gas_optimizer: GasOptimizer,
+                 chain_mgr: ChainManager = None, default_chain: int = 1):
         self.w3 = w3
         self.wallet_mgr = wallet_mgr
         self.gas_optimizer = gas_optimizer
+        self.chain_mgr = chain_mgr or ChainManager()
+        self.default_chain = default_chain
         self.executor = ThreadPoolExecutor(max_workers=20)
         self._info_cache = {}
 
@@ -155,7 +159,7 @@ class MintingEngine:
         return self._detect_mint_data(contract_address)
 
     def mint_single(self, contract_address: str, private_key: str, quantity: int = 1,
-                    gas_strategy: str = "auto") -> dict:
+                    gas_strategy: str = "auto", chain_id: int = 1) -> dict:
         if gas_strategy == "fast":
             gas_strategy = "auto"
         contract_addr = Web3.to_checksum_address(contract_address)
@@ -198,12 +202,13 @@ class MintingEngine:
                 return {
                     "success": True,
                     "tx_hash": tx_hex,
-                    "explorer_url": f"https://etherscan.io/tx/{tx_hex}",
+                    "explorer_url": self.chain_mgr.get_explorer_url(chain_id, tx_hex),
                     "contract": contract_address,
                     "quantity": quantity,
                     "gas_price_gwei": gas_params["priority_gwei"],
                     "method": f"{fn_name}({', '.join(fn_params)})",
                     "gas_strategy": current_strategy,
+                    "chain_id": chain_id,
                 }
             except Exception as e:
                 last_error = str(e)
@@ -231,7 +236,7 @@ class MintingEngine:
 
     def mint_parallel_single_wallet(self, contract_address: str, private_key: str,
                                       quantity: int = 1, rounds: int = 3,
-                                      gas_strategy: str = "fast") -> list:
+                                      gas_strategy: str = "auto", chain_id: int = 1) -> list:
         nonce = self.w3.eth.get_transaction_count(
             self.w3.eth.account.from_key(private_key).address, "pending"
         )
@@ -239,7 +244,7 @@ class MintingEngine:
         for i in range(rounds):
             futures.append(
                 self.executor.submit(self._mint_with_nonce, contract_address, private_key,
-                                      quantity, gas_strategy, nonce + i)
+                                      quantity, gas_strategy, nonce + i, chain_id)
             )
         results = []
         for future in as_completed(futures):
@@ -247,7 +252,7 @@ class MintingEngine:
         return results
 
     def _mint_with_nonce(self, contract_address: str, private_key: str, quantity: int,
-                          gas_strategy: str, nonce: int) -> dict:
+                          gas_strategy: str, nonce: int, chain_id: int = 1) -> dict:
         try:
             contract_addr = Web3.to_checksum_address(contract_address)
             info = self._detect_mint_data(contract_address)
@@ -281,11 +286,12 @@ class MintingEngine:
             return {
                 "success": True,
                 "tx_hash": tx_hash.hex(),
-                "explorer_url": f"https://etherscan.io/tx/{tx_hash.hex()}",
+                "explorer_url": self.chain_mgr.get_explorer_url(chain_id, tx_hash.hex()),
                 "contract": contract_address,
                 "quantity": quantity,
                 "gas_price_gwei": gas_params["priority_gwei"],
                 "method": f"{fn_name}({', '.join(fn_params)})",
+                "chain_id": chain_id,
             }
         except Exception as e:
             return {"success": False, "error": str(e), "contract": contract_address}
