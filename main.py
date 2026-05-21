@@ -108,9 +108,11 @@ def main():
     max_delay = 60
     while True:
         try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             bot.run()
         except Exception as e:
-            logger.error(f"Bot crashed: {e}. Restarting in {retry_delay}s...", exc_info=True)
+            logger.error(f"Bot crashed: {e}. Restarting in {retry_delay}s...")
             time.sleep(retry_delay)
             retry_delay = min(retry_delay * 2, max_delay)
 
