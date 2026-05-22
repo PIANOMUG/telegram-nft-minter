@@ -757,9 +757,10 @@ class NFTBot:
                 logger.error(f"Pending mint #{pm.get('id', '?')} sync error: {e}")
 
     async def run_async(self):
+        await self.app.initialize()
+        await self.app.start()
         if self.app.job_queue:
             self.app.job_queue.run_repeating(self._check_pending_mints, interval=15, first=10)
-        await self.app.start()
         await self.app.updater.start_polling(
             timeout=1,
             drop_pending_updates=True,
