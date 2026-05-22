@@ -1,9 +1,12 @@
 import time
 import json
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 
 MINT_SIGS = {
@@ -133,9 +136,9 @@ class MempoolMonitor:
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                             })
                             self._pending_mints.pop(addr, None)
-            except Exception:
-                pass
-            time.sleep(0.1)
+            except Exception as e:
+                logger.error(f"Mempool monitor error: {e}")
+            time.sleep(1.0)
 
     def start(self):
         if self._running:

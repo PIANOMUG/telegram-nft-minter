@@ -55,6 +55,7 @@ class MintingEngine:
         self.default_chain = default_chain
         self.executor = ThreadPoolExecutor(max_workers=20)
         self._info_cache = {}
+        self._cache_max = 500
 
     def _get_mint_price(self, contract: Web3, address: str) -> int:
         price_selectors = [
@@ -156,9 +157,13 @@ class MintingEngine:
         return "mint", ["uint256"]
 
     def _detect_mint_data(self, contract_address: str) -> dict:
-        cached = self._info_cache.get(contract_address.lower())
+        key = contract_address.lower()
+        cached = self._info_cache.get(key)
         if cached:
             return cached
+        if len(self._info_cache) > self._cache_max:
+            for k in list(self._info_cache)[:100]:
+                del self._info_cache[k]
         addr = Web3.to_checksum_address(contract_address)
         contract = self.w3.eth.contract(address=addr, abi=MINT_ABI)
         info_contract = self.w3.eth.contract(address=addr, abi=MONITOR_ABI)
@@ -175,7 +180,7 @@ class MintingEngine:
         mint_price = self._get_mint_price(contract, contract_address)
         fn_name, fn_params = self._find_mint_function(contract)
         result = {"name": name, "symbol": symbol, "mint_price": mint_price, "fn_name": fn_name, "fn_params": fn_params}
-        self._info_cache[contract_address.lower()] = result
+        self._info_cache[key] = result
         return result
 
     def get_contract_info(self, contract_address: str) -> dict:
@@ -183,11 +188,10 @@ class MintingEngine:
 
     def mint_single(self, contract_address: str, private_key: str, quantity: int = 1,
                     gas_strategy: str = "auto", chain_id: int = 1) -> dict:
-        if gas_strategy == "fast":
-            gas_strategy = "auto"
+        w3 = self.chain_mgr.get_w3(chain_id) if chain_id != self.default_chain else self.w3
         contract_addr = Web3.to_checksum_address(contract_address)
         info = self._detect_mint_data(contract_address)
-        account = self.w3.eth.account.from_key(private_key)
+        account = w3.eth.account.from_key(private_key)
         sender = account.address
         mint_price = info["mint_price"]
         total_value = mint_price * quantity
@@ -198,8 +202,8 @@ class MintingEngine:
         if fn_name is None:
             fn_name, fn_params = info["fn_name"], info["fn_params"]
 
-        contract = self.w3.eth.contract(address=contract_addr, abi=MINT_ABI)
-        nonce = self.w3.eth.get_transaction_count(sender, "pending")
+        contract = w3.eth.contract(address=contract_addr, abi=MINT_ABI)
+        nonce = w3.eth.get_transaction_count(sender, "pending")
         current_strategy = gas_strategy
         last_error = None
 
@@ -208,7 +212,7 @@ class MintingEngine:
                 gas_params = self.gas_optimizer.get_optimal_gas(current_strategy)
                 tx_base = {
                     "from": sender, "nonce": nonce, "value": total_value,
-                    "chainId": self.w3.eth.chain_id,
+                    "chainId": w3.eth.chain_id,
                     "gas": GAS_LIMIT_MINT,
                     "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
                     "maxFeePerGas": gas_params["maxFeePerGas"],
@@ -218,8 +222,8 @@ class MintingEngine:
                 else:
                     tx_data = getattr(contract.functions, fn_name)().build_transaction(tx_base)
 
-                signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
-                tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+                signed = w3.eth.account.sign_transaction(tx_data, private_key)
+                tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
                 tx_hex = tx_hash.hex()
 
                 return {
@@ -241,7 +245,7 @@ class MintingEngine:
                 if new_strategy == current_strategy:
                     break
                 current_strategy = new_strategy
-                nonce = self.w3.eth.get_transaction_count(sender, "pending")
+                nonce = w3.eth.get_transaction_count(sender, "pending")
 
         return {"success": False, "error": last_error, "contract": contract_address}
 
@@ -277,9 +281,10 @@ class MintingEngine:
     def _mint_with_nonce(self, contract_address: str, private_key: str, quantity: int,
                           gas_strategy: str, nonce: int, chain_id: int = 1) -> dict:
         try:
+            w3 = self.chain_mgr.get_w3(chain_id) if chain_id != self.default_chain else self.w3
             contract_addr = Web3.to_checksum_address(contract_address)
             info = self._detect_mint_data(contract_address)
-            account = self.w3.eth.account.from_key(private_key)
+            account = w3.eth.account.from_key(private_key)
             sender = account.address
             mint_price = info["mint_price"]
             total_value = mint_price * quantity
@@ -291,10 +296,10 @@ class MintingEngine:
                 fn_name, fn_params = info["fn_name"], info["fn_params"]
 
             gas_params = self.gas_optimizer.get_optimal_gas(gas_strategy)
-            contract = self.w3.eth.contract(address=contract_addr, abi=MINT_ABI)
+            contract = w3.eth.contract(address=contract_addr, abi=MINT_ABI)
             tx_base = {
                 "from": sender, "nonce": nonce, "value": total_value,
-                "chainId": self.w3.eth.chain_id,
+                "chainId": w3.eth.chain_id,
                 "gas": GAS_LIMIT_MINT,
                 "maxPriorityFeePerGas": gas_params["maxPriorityFeePerGas"],
                 "maxFeePerGas": gas_params["maxFeePerGas"],
@@ -304,8 +309,8 @@ class MintingEngine:
             else:
                 tx_data = getattr(contract.functions, fn_name)().build_transaction(tx_base)
 
-            signed = self.w3.eth.account.sign_transaction(tx_data, private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            signed = w3.eth.account.sign_transaction(tx_data, private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
             return {
                 "success": True,
                 "tx_hash": tx_hash.hex(),

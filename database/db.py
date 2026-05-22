@@ -14,11 +14,22 @@ class Database:
     @property
     def conn(self):
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            self._local.conn = sqlite3.connect(self.db_path)
-            self._local.conn.row_factory = sqlite3.Row
-            self._local.conn.execute("PRAGMA journal_mode=WAL")
-            self._local.conn.execute("PRAGMA busy_timeout=5000")
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            self._local.conn = conn
         return self._local.conn
+
+    def _retry_on_fail(self, fn, *args, **kwargs):
+        for attempt in range(3):
+            try:
+                return fn(*args, **kwargs)
+            except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+                if attempt < 2:
+                    self._local.conn = None
+                    continue
+                raise e
 
     def _init_db(self):
         c = self.conn
@@ -87,9 +98,11 @@ class Database:
 
     def _migrate(self):
         c = self.conn
-        existing = [row["name"] for row in c.execute("PRAGMA table_info(wallets)").fetchall()]
-        if "user_id" not in existing:
-            c.executescript("DROP TABLE IF EXISTS wallets; DROP TABLE IF EXISTS monitored_contracts; DROP TABLE IF EXISTS mint_jobs; DROP TABLE IF EXISTS settings; DROP TABLE IF EXISTS pending_mints;")
+        tables = ["wallets", "monitored_contracts", "mint_jobs", "settings", "pending_mints"]
+        for table in tables:
+            cols = [row["name"] for row in c.execute(f"PRAGMA table_info({table})").fetchall()]
+            if "user_id" not in cols:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0")
 
     def add_wallet(self, user_id: int, label: str, address: str, encrypted_key: str) -> int:
         cur = self.conn.execute(
@@ -138,6 +151,14 @@ class Database:
         params = [user_id]
         if status:
             q += " AND status = ?"
+            params.append(status)
+        return self.conn.execute(q, params).fetchall()
+
+    def get_all_monitored_contracts(self, status: str = None):
+        q = "SELECT * FROM monitored_contracts"
+        params = []
+        if status:
+            q += " WHERE status = ?"
             params.append(status)
         return self.conn.execute(q, params).fetchall()
 

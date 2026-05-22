@@ -48,7 +48,10 @@ def main():
 
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if w3.is_connected():
-        logger.info(f"Connected to chain {CHAIN_ID} (block: {w3.eth.block_number})")
+        try:
+            logger.info(f"Connected to chain {CHAIN_ID} (block: {w3.eth.block_number})")
+        except Exception:
+            logger.warning("Connected but could not get block number.")
     else:
         logger.warning("Web3 not connected. Some features will be limited.")
 
@@ -89,18 +92,6 @@ def main():
     if db.get_setting(0, "gas_strategy") is None:
         db.set_setting(0, "gas_strategy", DEFAULT_GAS_STRATEGY)
 
-    bot = NFTBot(
-        token=TELEGRAM_BOT_TOKEN,
-        db=db,
-        wallet_mgr=wallet_mgr,
-        gas_opt=gas_opt,
-        engine=engine,
-        monitor=orchestrator,
-        allowed_users=ALLOWED_USER_IDS or None,
-        opensea=opensea,
-        chain_mgr=chain_mgr,
-    )
-
     orchestrator.start()
     logger.info("Monitor started. Launching bot...")
 
@@ -108,6 +99,18 @@ def main():
     max_delay = 60
     while True:
         try:
+            engine = MintingEngine(w3, wallet_mgr, gas_opt, chain_mgr=chain_mgr, default_chain=CHAIN_ID)
+            bot = NFTBot(
+                token=TELEGRAM_BOT_TOKEN,
+                db=db,
+                wallet_mgr=wallet_mgr,
+                gas_opt=gas_opt,
+                engine=engine,
+                monitor=orchestrator,
+                allowed_users=ALLOWED_USER_IDS or None,
+                opensea=opensea,
+                chain_mgr=chain_mgr,
+            )
             bot.run()
         except Exception as e:
             logger.error(f"Bot crashed: {e}. Restarting in {retry_delay}s...")

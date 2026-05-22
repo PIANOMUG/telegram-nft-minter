@@ -106,9 +106,3 @@ class GasOptimizer:
                 return tiers[idx + 1]
         return "max"
 
-    def estimate_gas_for_mint(self, contract_address: str, w3: Web3) -> int:
-        try:
-            gas_estimate = w3.eth.estimate_gas({"to": contract_address, "data": "0x"})
-            return int(gas_estimate * 1.2)
-        except Exception:
-            return 300000

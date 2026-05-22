@@ -1,4 +1,5 @@
 import time
+import logging
 import threading
 from datetime import datetime, timezone
 from typing import Callable
@@ -7,6 +8,8 @@ from .etherscan_monitor import EtherscanMonitor
 from .opensea_monitor import OpenSeaMonitor
 from .mempool_monitor import MempoolMonitor
 from .scanner import ContractScanner
+
+logger = logging.getLogger(__name__)
 
 
 class MonitorOrchestrator:
@@ -29,8 +32,8 @@ class MonitorOrchestrator:
         for cb in self._listeners:
             try:
                 cb(data)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Listener callback error: {e}")
 
     def add_contract(self, address: str):
         self._monitored_contracts.add(address.lower())
@@ -76,7 +79,7 @@ class MonitorOrchestrator:
         while self._running:
             try:
                 if self.db:
-                    db_contracts = self.db.get_monitored_contracts(status="pending")
+                    db_contracts = self.db.get_all_monitored_contracts(status="pending")
                     for c in db_contracts:
                         addr = c["address"]
                         info = self.etherscan.detect_nft_contract(addr) if self.etherscan else {}
@@ -90,8 +93,8 @@ class MonitorOrchestrator:
                                 "source": "etherscan_check",
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                             })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Etherscan loop error: {e}")
             time.sleep(30)
 
     def _opensea_loop(self):
@@ -103,9 +106,9 @@ class MonitorOrchestrator:
                         addr = col.get("contract_address", "").lower()
                         if addr and self.db:
                             try:
-                                self.db.add_monitored_contract(addr, col.get("name"))
-                            except Exception:
-                                pass
+                                self.db.add_monitored_contract(0, addr, col.get("name"))
+                            except Exception as e:
+                                logger.error(f"Opensea add contract error: {e}")
                             self.add_contract(addr)
                             self._notify({
                                 "type": "new_collection",
@@ -114,8 +117,8 @@ class MonitorOrchestrator:
                                 "source": "opensea",
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                             })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"OpenSea loop error: {e}")
             time.sleep(60)
 
     def _scanner_loop(self):
@@ -127,9 +130,9 @@ class MonitorOrchestrator:
                         addr = info.get("address", "").lower()
                         if addr and self.db:
                             try:
-                                self.db.add_monitored_contract(addr, info.get("name"))
-                            except Exception:
-                                pass
+                                self.db.add_monitored_contract(0, addr, info.get("name"))
+                            except Exception as e:
+                                logger.error(f"Scanner add contract error: {e}")
                             self.add_contract(addr)
                             self._notify({
                                 "type": "new_contract_detected",
@@ -138,8 +141,8 @@ class MonitorOrchestrator:
                                 "source": "chain_scan",
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                             })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Scanner loop error: {e}")
             time.sleep(15)
 
     def stop(self):

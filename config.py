@@ -4,7 +4,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-ALLOWED_USER_IDS = [int(x) for x in os.getenv("ALLOWED_USER_IDS", "").split(",") if x]
+_raw_ids = os.getenv("ALLOWED_USER_IDS", "").split(",")
+ALLOWED_USER_IDS = []
+for x in _raw_ids:
+    x = x.strip()
+    if x:
+        try:
+            ALLOWED_USER_IDS.append(int(x))
+        except ValueError:
+            pass
 
 RPC_URL = os.getenv("RPC_URL", "https://eth-mainnet.g.alchemy.com/v2/your-api-key")
 CHAIN_ID = int(os.getenv("CHAIN_ID", "1"))

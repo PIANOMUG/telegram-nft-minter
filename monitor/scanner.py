@@ -123,7 +123,7 @@ class ContractScanner:
 
     def _call_string_fn(self, address: str, selector: str) -> str:
         try:
-            data = selector + "0" * 24
+            data = selector + "0" * 56
             resp = requests.post(
                 self.base_url.replace("api", "rpc"),
                 json={
@@ -136,9 +136,17 @@ class ContractScanner:
             )
             result = resp.json().get("result", "0x")
             if result and len(result) > 2:
-                decoded = bytes.fromhex(result[2:]).decode("utf-8", errors="ignore")
-                cleaned = re.sub(r'[^\x20-\x7E]', '', decoded)
-                return cleaned[:40]
+                raw = bytes.fromhex(result[2:])
+                if len(raw) >= 68:
+                    offset = int.from_bytes(raw[32:64], "big") + 64
+                    if offset + 32 <= len(raw):
+                        length = int.from_bytes(raw[offset:offset+32], "big")
+                        if offset + 32 + length <= len(raw):
+                            decoded = raw[offset+32:offset+32+length].decode("utf-8", errors="ignore")
+                            cleaned = re.sub(r'[^\x20-\x7E]', '', decoded)
+                            return cleaned[:40]
+                decoded = raw.decode("utf-8", errors="ignore")
+                return re.sub(r'[^\x20-\x7E]', '', decoded)[:40]
             return ""
         except Exception:
             return ""

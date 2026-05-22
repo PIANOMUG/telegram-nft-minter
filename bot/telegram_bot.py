@@ -203,8 +203,8 @@ class NFTBot:
         label = f"wallet_{address[:6]}"
         self.db.add_wallet(uid, label, address, encrypted)
         await self._reply(update,
-            f"**New Wallet Created**\nAddress: `{address}`\nPrivate Key: `{pk}`\n\n"
-            "**SAVE THIS KEY. It will not be shown again.**",
+            f"**New Wallet Created**\nAddress: `{address}`\n\n"
+            "Private key is encrypted and stored securely in the database.",
         )
 
     async def cmd_delete_wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -639,7 +639,14 @@ class NFTBot:
                 logger.warning(f"Sync pending mint {pm.get('id')}: {e}")
 
     def _on_mint_opportunity(self, data: dict):
-        asyncio.run(self._broadcast_opportunity(data))
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(self._broadcast_opportunity(data), loop)
+            else:
+                asyncio.run(self._broadcast_opportunity(data))
+        except RuntimeError:
+            asyncio.run(self._broadcast_opportunity(data))
 
     async def _broadcast_opportunity(self, data: dict):
         event_type = data.get("type", "opportunity")

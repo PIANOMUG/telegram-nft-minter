@@ -91,20 +91,25 @@ class EtherscanMonitor:
 
     def _check_interface_support(self, address: str) -> str:
         try:
-            data = "0x01ffc9a7" + ERC721_SIG[2:].zfill(64)
-            resp = requests.post(
-                f"{self.base.replace('api', 'rpc')}",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "eth_call",
-                    "params": [{"to": address, "data": data}, "latest"],
-                    "id": 1,
-                },
-                timeout=5,
-            )
-            result = resp.json().get("result", "0x" + "0" * 64)
-            if result and result != "0x" + "0" * 64:
-                return "erc721"
+            erc721_data = "0x01ffc9a7" + ERC721_SIG[2:].zfill(64)
+            erc1155_data = "0x01ffc9a7" + ERC1155_SIG[2:].zfill(64)
+            for label, sig_data in [("erc1155", erc1155_data), ("erc721", erc721_data)]:
+                try:
+                    resp = requests.post(
+                        f"{self.base.replace('api', 'rpc')}",
+                        json={
+                            "jsonrpc": "2.0",
+                            "method": "eth_call",
+                            "params": [{"to": address, "data": sig_data}, "latest"],
+                            "id": 1,
+                        },
+                        timeout=5,
+                    )
+                    result = resp.json().get("result", "0x" + "0" * 64)
+                    if result and result != "0x" + "0" * 64:
+                        return label
+                except Exception:
+                    continue
         except Exception:
             pass
         return "unknown"

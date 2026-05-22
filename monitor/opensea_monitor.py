@@ -28,7 +28,7 @@ class OpenSeaMonitor:
             for col in data.get("collections", []):
                 if not isinstance(col, dict):
                     continue
-                slug = col.get("collection", "")
+                slug = col.get("slug") or col.get("collection", "")
                 if slug in self.seen_collections:
                     continue
                 self.seen_collections.add(slug)
