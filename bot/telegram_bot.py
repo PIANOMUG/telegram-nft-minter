@@ -756,13 +756,23 @@ class NFTBot:
             except Exception as e:
                 logger.error(f"Pending mint #{pm.get('id', '?')} sync error: {e}")
 
-    def run(self):
+    async def run_async(self):
         if self.app.job_queue:
             self.app.job_queue.run_repeating(self._check_pending_mints, interval=15, first=10)
-        self.app.run_polling(
+        await self.app.start()
+        await self.app.updater.start_polling(
             timeout=1,
             drop_pending_updates=True,
             allowed_updates=["message", "callback_query"],
             bootstrap_retries=10,
-            close_loop=False,
         )
+        while True:
+            await asyncio.sleep(3600)
+
+    def run(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self.run_async())
+        finally:
+            loop.close()

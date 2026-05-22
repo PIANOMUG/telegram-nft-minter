@@ -104,15 +104,10 @@ def main():
     orchestrator.start()
     logger.info("Monitor started. Launching bot...")
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     retry_delay = 1
     max_delay = 60
     while True:
         try:
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
             bot.run()
         except Exception as e:
             logger.error(f"Bot crashed: {e}. Restarting in {retry_delay}s...")
