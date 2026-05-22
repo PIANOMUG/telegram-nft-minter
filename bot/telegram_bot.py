@@ -640,12 +640,10 @@ class NFTBot:
 
     def _on_mint_opportunity(self, data: dict):
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             asyncio.ensure_future(self._broadcast_opportunity(data))
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.create_task(self._broadcast_opportunity(data))
+            asyncio.run(self._broadcast_opportunity(data))
 
     async def _broadcast_opportunity(self, data: dict):
         event_type = data.get("type", "opportunity")
