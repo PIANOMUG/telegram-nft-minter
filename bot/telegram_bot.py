@@ -764,5 +764,5 @@ class NFTBot:
             drop_pending_updates=True,
             allowed_updates=["message", "callback_query"],
             bootstrap_retries=10,
-
+            close_loop=False,
         )
