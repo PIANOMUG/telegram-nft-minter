@@ -57,11 +57,23 @@ class MintingEngine:
         self._info_cache = {}
 
     def _get_mint_price(self, contract: Web3, address: str) -> int:
-        price_checks = ["mintPrice", "cost", "price", "MINT_PRICE"]
-        for fn_name in price_checks:
+        price_selectors = [
+            ("mintPrice", "67e0badb"), ("cost", "823afc11"),
+            ("price", "a035b1fe"), ("publicMintPrice", "ceb24bd0"),
+            ("salePrice", "93bf7bee"), ("getPrice", "ceb24bd0"),
+            ("mintFee", "514e62fc"), ("mintCost", "d0e4b9f6"),
+            ("MINT_PRICE", "a2d7c3f4"), ("getMintCost", "cc9c37fc"),
+        ]
+        addr = Web3.to_checksum_address(address)
+        for fn_name, selector_hex in price_selectors:
             try:
-                fn = getattr(contract.functions, fn_name)
-                return fn().call()
+                selector = bytes.fromhex(selector_hex)
+                data = "0x" + selector.hex()
+                result = self.w3.eth.call({"to": addr, "data": data})
+                if result and len(result) >= 32:
+                    val = int.from_bytes(result[-32:], "big")
+                    if val > 0:
+                        return val
             except Exception:
                 continue
         return 0
@@ -87,15 +99,26 @@ class MintingEngine:
         except Exception:
             return False
 
+    def _try_values(self, contract_address: str, wallet_address: str,
+                     fn_sig: str, needs_quantity: bool, quantity: int, values: list) -> bool:
+        for v in values:
+            if self.simulate_mint_call(contract_address, wallet_address,
+                                        fn_sig, needs_quantity, quantity, v):
+                return True
+        return False
+
     def detect_available_mint(self, contract_address: str, wallet_address: str,
                                mint_price: int = 0, quantity: int = 1):
-        value = mint_price * quantity
+        values_to_try = [mint_price * quantity]
+        if mint_price * quantity == 0:
+            values_to_try.append(10**15)
+            values_to_try.append(5 * 10**15)
         addr = Web3.to_checksum_address(contract_address)
         futures = {}
         for fn_sig, needs_quantity in MINT_CANDIDATES:
             futures[self.executor.submit(
-                self.simulate_mint_call, contract_address, wallet_address,
-                fn_sig, needs_quantity, quantity, value
+                self._try_values, contract_address, wallet_address,
+                fn_sig, needs_quantity, quantity, values_to_try
             )] = (fn_sig, needs_quantity)
 
         for future in as_completed(futures):
