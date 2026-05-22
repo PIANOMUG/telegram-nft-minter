@@ -761,7 +761,7 @@ class NFTBot:
                     )
                     synced = True
             except Exception as e:
-                logger.error(f"Pending mint #{pm.get('id', '?')} sync error: {e}")
+                logger.error(f"Pending mint #{pm['id']} sync error: {e}")
 
     async def run_async(self):
         await self.app.initialize()
