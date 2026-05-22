@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes,
@@ -15,6 +15,41 @@ from monitor.orchestrator import MonitorOrchestrator
 from monitor.opensea_monitor import OpenSeaMonitor
 
 logger = logging.getLogger(__name__)
+
+MENU = {
+    "👛 Wallets": "/wallets",
+    "➕ Add Wallet": "/addwallet",
+    "✨ Create Wallet": "/createwallet",
+    "❌ Delete Wallet": "/deletewallet",
+    "💰 Balance": "/balance",
+    "🎨 Mint": "/mint",
+    "⚡ Fast Mint": "/fastmint",
+    "🖼️ OpenSea Mint": "/openseamint",
+    "👁️ Monitor": "/monitor",
+    "📋 Contracts": "/contracts",
+    "📅 Schedule": "/schedule",
+    "🤖 Auto Mint On": "/autoon",
+    "⛔ Auto Off": "/autooff",
+    "⛽ Gas Prices": "/gas",
+    "🎯 Set Gas": "/setgas",
+    "🔗 Set Chain": "/setchain",
+    "📊 Status": "/status",
+    "ℹ️ Help": "/help",
+}
+
+ARGLESS = {"/wallets", "/balance", "/contracts", "/schedule", "/autoon",
+           "/autooff", "/gas", "/status", "/help", "/createwallet", "/test", "/ping"}
+
+
+def _build_menu():
+    keys = list(MENU.keys())
+    rows = []
+    for i in range(0, len(keys), 2):
+        row = [KeyboardButton(keys[i])]
+        if i + 1 < len(keys):
+            row.append(KeyboardButton(keys[i + 1]))
+        rows.append(row)
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
 class NFTBot:
@@ -111,27 +146,11 @@ class NFTBot:
             await self._reply(update, "Unauthorized.")
             return
         text = (
-            "**NFT SuperMinter Bot**\n\n"
-            "Monitor and mint NFTs the moment they go live.\n\n"
-            "**Commands:**\n"
-            "/wallets - List your wallets\n"
-            "/addwallet `<privkey>` - Import a wallet\n"
-            "/createwallet - Generate a new wallet\n"
-            "/deletewallet `<id>` - Remove a wallet\n"
-            "/monitor `<address>` - Watch a contract for live mint\n"
-            "/contracts - List monitored contracts\n"
-            "/mint `<address>` `[qty]` - Mint NFTs\n"
-            "/fastmint `<address>` `[qty]` `[rounds]` - Mint NFTs at superspeed\n"
-            "/openseamint `<url>` `[qty]` - Mint using an OpenSea link\n"
-            "/gas - Check current gas prices\n"
-            "/setgas `<auto|slow|average|fast|instant|max>` - Set gas strategy\n"
-            "/balance - Check ETH balance\n"
-            "/autoon - Enable auto-mint on detection\n"
-            "/autooff - Disable auto-mint\n"
-            "/setchain `<1|8453|42161>` - Switch chain (Ethereum / Base / Arbitrum)\n"
-            "/status - Bot status\n"
+            "🚀 **NFT SuperMinter Bot**\n\n"
+            "Monitor & mint NFTs instantly.\n\n"
+            "Tap a button below to get started 👇"
         )
-        await self._reply(update, text)
+        await update.message.reply_text(text, reply_markup=_build_menu())
 
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await self.cmd_start(update, context)
@@ -546,7 +565,25 @@ class NFTBot:
         await self._reply(update, "pong!")
 
     async def cmd_echo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        logger.info(f"Echo from user {update.effective_user.id}: {update.message.text}")
+        text = (update.message.text or "").strip()
+        if text in MENU:
+            cmd = MENU[text]
+            context.args = []
+            if cmd in ARGLESS:
+                await getattr(self, f"cmd_{cmd[1:]}")(update, context)
+            else:
+                usage = {
+                    "/addwallet": "Usage: /addwallet `<private_key>`\n\nPaste your private key to import a wallet.",
+                    "/deletewallet": "Usage: /deletewallet `<id>`\n\nUse /wallets to find the ID.",
+                    "/mint": "Usage: /mint `<contract_address>` `[quantity=1]`",
+                    "/fastmint": "Usage: /fastmint `<contract>` `[qty=1]` `[rounds=3]`",
+                    "/openseamint": "Usage: /openseamint `<opensea_url>` `[qty=1]`",
+                    "/monitor": "Usage: /monitor `<contract_address>`",
+                    "/setgas": "Usage: /setgas `<auto|slow|average|fast|instant|max>`",
+                    "/setchain": "Usage: /setchain `<1|8453|42161>`\n\n1 = Ethereum, 8453 = Base, 42161 = Arbitrum",
+                }
+                await self._reply(update, usage.get(cmd, f"Type `{cmd}` with the required arguments."))
+            return
         await self._reply(update, f"You said: {update.message.text}")
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
